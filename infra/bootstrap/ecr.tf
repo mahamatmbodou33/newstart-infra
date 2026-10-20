@@ -1,3 +1,4 @@
+// This file creates an ECR repository for each service in the project. It also creates a lifecycle policy to keep only the last 30 images in each repository.
 resource "aws_ecr_repository" "svc" {
   for_each             = toset(var.services)
   name                 = "${var.project}/${each.key}"
@@ -9,6 +10,7 @@ resource "aws_ecr_repository" "svc" {
   }
 }
 
+// Lifecycle policy to keep only the last 30 images in each ECR repository
 resource "aws_ecr_lifecycle_policy" "svc" {
   for_each   = aws_ecr_repository.svc
   repository = each.value.name

@@ -62,3 +62,8 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "route53_zone_arn" {
+  description = "ExternalDNS may only change records in this hosted zone"
+  type        = string
+}

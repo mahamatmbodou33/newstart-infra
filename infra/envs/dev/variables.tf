@@ -49,3 +49,32 @@ variable "system_node_max" {
 variable "log_retention_days" {
   type = number
 }
+
+variable "zone_name" {
+  type = string
+}
+
+variable "enable_waf" {
+  type = bool
+}
+
+variable "db_instance_class" {
+  type = string
+}
+
+variable "db_multi_az" {
+  type = bool
+}
+
+variable "db_backup_retention_days" {
+  type = number
+}
+
+variable "db_deletion_protection" {
+  type = bool
+}
+
+variable "db_password_version" {
+  type    = number
+  default = 1
+}

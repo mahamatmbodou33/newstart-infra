@@ -1,3 +1,4 @@
+// This file creates a budget for the project. It will send email notifications to the specified email address when the budget exceeds 50% of the monthly budget (actual) and when it is forecasted to exceed 100% of the monthly budget (forecasted).
 resource "aws_budgets_budget" "monthly" {
   name         = "${var.project}-monthly"
   budget_type  = "COST"

@@ -11,18 +11,21 @@ module "eks" {
   subnet_ids = var.private_subnet_ids
 
   # --- API endpoint ---
+  // --- The API endpoint is accessible from the public internet, but only from the admin CIDRs. ---
   endpoint_private_access      = true
   endpoint_public_access       = true
   endpoint_public_access_cidrs = var.admin_cidrs
 
   # --- audit trail ---
+  // --- The EKS control plane logs are sent to CloudWatch Logs. ---
   enabled_log_types                      = ["api", "audit", "authenticator"]
   cloudwatch_log_group_retention_in_days = var.log_retention_days
 
   # --- who is admin ---
   authentication_mode                      = "API"
-  enable_cluster_creator_admin_permissions = false
+  enable_cluster_creator_admin_permissions = false // The cluster creator is not automatically an admin. Admins are defined below.
 
+  //  --- Admins are defined by IAM users/roles that can assume the cluster-admin role through the aws-auth configmap. ---
   access_entries = {
     for i, arn in var.admin_principal_arns : "admin-${i}" => {
       principal_arn = arn
@@ -38,13 +41,13 @@ module "eks" {
   # --- add-ons (managed by AWS, upgraded through Terraform) ---
   addons = {
     eks-pod-identity-agent = { before_compute = true } // Lets Kubernetes workloads obtain AWS permissions through Pod Identity.
-    vpc-cni = { // Lets Kubernetes workloads access AWS services through VPC networking.
-      before_compute       = true // Must be installed before any other add-on that requires networking.
+    vpc-cni = {                                        // Lets Kubernetes workloads access AWS services through VPC networking.
+      before_compute       = true                      // Must be installed before any other add-on that requires networking.
       configuration_values = jsonencode({ enableNetworkPolicy = "true" })
     }
-    kube-proxy = {} // Lets Kubernetes workloads access the cluster API through the VPC CNI.
-    coredns    = {} // Lets Kubernetes workloads resolve DNS names through the cluster DNS service.
-    aws-ebs-csi-driver = { // Lets Kubernetes workloads use AWS EBS volumes as persistent storage.
+    kube-proxy = {}                 // Lets Kubernetes workloads access the cluster API through the VPC CNI.
+    coredns    = {}                 // Lets Kubernetes workloads resolve DNS names through the cluster DNS service.
+    aws-ebs-csi-driver = {          // Lets Kubernetes workloads use AWS EBS volumes as persistent storage.
       pod_identity_association = [{ // Associate the EBS CSI driver pods with the EBS CSI IAM role.
         role_arn        = module.ebs_csi_pod_identity.iam_role_arn
         service_account = "ebs-csi-controller-sa"
@@ -54,7 +57,7 @@ module "eks" {
 
   # --- system node group ---
   eks_managed_node_groups = { // Lets Kubernetes workloads run on EC2 instances managed by AWS.
-    system = {                
+    system = {
       instance_types = var.system_node_instance_types
       capacity_type  = "ON_DEMAND"
       min_size       = var.system_node_min
@@ -67,7 +70,7 @@ module "eks" {
       }
 
       iam_role_additional_policies = { // Lets the system node group run the Karpenter controller.
-        ssm = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" 
+        ssm = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
   }
@@ -79,25 +82,44 @@ module "eks" {
   tags = var.tags
 }
 
+
+module "external_dns_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 2.0"
+
+  name                          = "${var.cluster_name}-external-dns"
+  attach_external_dns_policy    = true
+  external_dns_hosted_zone_arns = [var.route53_zone_arn]
+
+  associations = {
+    this = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "external-dns"
+      service_account = "external-dns"
+    }
+  }
+  tags = var.tags
+}
+
 // Karpenter is an open-source, high-performance node lifecycle management and autoscaling tool for Kubernetes clusters
 
-module "karpenter" { 
+module "karpenter" {
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
   version = "~> 21.0"
 
   cluster_name = module.eks.cluster_name // Reference to the EKS cluster name
 
   enable_inline_policy = true // Enable inline policy for the Karpenter controller
-  
-  node_iam_role_use_name_prefix = false // Use the full name for the IAM role instead of a prefix
-  node_iam_role_name            = "${var.cluster_name}-karpenter-node" // Name of the IAM role for Karpenter nodes
-  iam_role_use_name_prefix      = false // Use the full name for the IAM role instead of a prefix
-  iam_role_name                 = "${var.cluster_name}-karpenter-controller" // Name of the IAM role for the Karpenter controller
-  queue_name                    = "${var.cluster_name}-karpenter" // Name of the SQS queue for Karpenter
 
-  create_pod_identity_association = true // Create an association between the Karpenter controller and the IAM role
+  node_iam_role_use_name_prefix = false                                      // Use the full name for the IAM role instead of a prefix
+  node_iam_role_name            = "${var.cluster_name}-karpenter-node"       // Name of the IAM role for Karpenter nodes
+  iam_role_use_name_prefix      = false                                      // Use the full name for the IAM role instead of a prefix
+  iam_role_name                 = "${var.cluster_name}-karpenter-controller" // Name of the IAM role for the Karpenter controller
+  queue_name                    = "${var.cluster_name}-karpenter"            // Name of the SQS queue for Karpenter
+
+  create_pod_identity_association = true          // Create an association between the Karpenter controller and the IAM role
   namespace                       = "kube-system" // Namespace where the Karpenter controller will be deployed
-  service_account                 = "karpenter" // Service account for the Karpenter controller
+  service_account                 = "karpenter"   // Service account for the Karpenter controller
 
   node_iam_role_additional_policies = { // Additional IAM policies for the Karpenter node role
     ssm = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -110,7 +132,7 @@ module "karpenter" {
 // This controller manages AWS load-balancing resources for Kubernetes applications, such as Application Load Balancers (ALBs) created through Ingress resources.
 // The association connects those permissions to the aws-load-balancer-controller service account in kube-system.
 
-module "aws_lb_controller_pod_identity" { 
+module "aws_lb_controller_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 2.0"
 
@@ -151,8 +173,8 @@ module "external_secrets_pod_identity" {
   }
   tags = var.tags
 }
- // Creates the IAM role and permissions required by the EBS CSI driver to manage EBS volumes.
- // The role is associated with the ebs-csi-controller-sa service account through the EKS add-on configuration above
+// Creates the IAM role and permissions required by the EBS CSI driver to manage EBS volumes.
+// The role is associated with the ebs-csi-controller-sa service account through the EKS add-on configuration above
 module "ebs_csi_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 2.0"
@@ -170,8 +192,8 @@ resource "aws_cloudwatch_log_group" "containers" {
   tags              = var.tags
 }
 
- // Creates the IAM role and permissions required by Fluent Bit to send container logs to CloudWatch.
-  // Purpose: Fluent Bit collects container logs and forwards them to CloudWatch Logs.
+// Creates the IAM role and permissions required by Fluent Bit to send container logs to CloudWatch.
+// Purpose: Fluent Bit collects container logs and forwards them to CloudWatch Logs.
 module "fluent_bit_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 2.0"
