@@ -78,3 +78,7 @@ variable "db_password_version" {
   type    = number
   default = 1
 }
+
+variable "db_final_snapshot" {
+  type = bool
+}

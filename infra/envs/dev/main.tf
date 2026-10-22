@@ -1,84 +1,52 @@
-data "aws_caller_identity" "current" {}
+module "stack" {
+  source = "../../modules/stack"
 
-locals {
-  name           = "${var.project}-${var.environment}" # k8s-portfolio-dev
-  cluster_name   = local.name
-  secrets_prefix = "${var.project}/${var.environment}"   # k8s-portfolio/dev
-  base_domain    = "${var.environment}.${var.zone_name}" # dev.mbodou.com
+  project     = var.project
+  environment = var.environment
+  region      = var.region
+  zone_name   = var.zone_name
 
-  terraform_apply_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project}-github-terraform-apply"
-
-  databases = {
-    "user-service"         = "newstart_users"
-    "opportunity-service"  = "newstart_opportunities"
-    "checklist-service"    = "newstart_checklists"
-    "notification-service" = "newstart_notifications"
-  }
-
-  tags = {
-    Project     = var.project
-    Environment = var.environment
-  }
-}
-
-module "network" {
-  source = "../../modules/network"
-
-  name               = local.name
-  cluster_name       = local.cluster_name
   vpc_cidr           = var.vpc_cidr
   az_count           = var.az_count
   single_nat_gateway = var.single_nat_gateway
-  tags               = local.tags
-}
+  enable_waf         = var.enable_waf
 
-module "edge" {
-  source = "../../modules/edge"
-
-  name        = local.name
-  zone_name   = var.zone_name
-  base_domain = local.base_domain
-  enable_waf  = var.enable_waf
-  tags        = local.tags
-}
-
-module "eks" {
-  source = "../../modules/eks"
-
-  cluster_name       = local.cluster_name
-  kubernetes_version = var.kubernetes_version
-  region             = var.region
-
-  vpc_id             = module.network.vpc_id
-  private_subnet_ids = module.network.private_subnets
-
-  admin_cidrs          = var.admin_cidrs
-  admin_principal_arns = distinct(concat(var.admin_principal_arns, [local.terraform_apply_role_arn]))
-
+  kubernetes_version         = var.kubernetes_version
+  admin_cidrs                = var.admin_cidrs
+  admin_principal_arns       = var.admin_principal_arns
   system_node_instance_types = var.system_node_instance_types
   system_node_min            = var.system_node_min
   system_node_max            = var.system_node_max
+  log_retention_days         = var.log_retention_days
 
-  secrets_prefix     = local.secrets_prefix
-  route53_zone_arn   = module.edge.zone_arn
-  log_retention_days = var.log_retention_days
-  tags               = local.tags
+  db_instance_class        = var.db_instance_class
+  db_multi_az              = var.db_multi_az
+  db_backup_retention_days = var.db_backup_retention_days
+  db_deletion_protection   = var.db_deletion_protection
+  db_final_snapshot        = var.db_final_snapshot
+  db_password_version      = var.db_password_version
 }
 
-module "data" {
-  source = "../../modules/data"
+# ---------------------------------------------------------------------------
+# Refactor: the 4 modules moved inside "stack". Tell Terraform it's the SAME
+# infrastructure at a new address, so nothing is destroyed or recreated.
+# ---------------------------------------------------------------------------
+moved {
+  from = module.network
+  to   = module.stack.module.network
+}
 
-  name                   = local.name
-  vpc_id                 = module.network.vpc_id
-  db_subnet_group_name   = module.network.database_subnet_group_name
-  node_security_group_id = module.eks.node_security_group_id
-  secrets_prefix         = local.secrets_prefix
-  databases              = local.databases
+moved {
+  from = module.edge
+  to   = module.stack.module.edge
+}
 
-  instance_class        = var.db_instance_class
-  multi_az              = var.db_multi_az
-  backup_retention_days = var.db_backup_retention_days
-  deletion_protection   = var.db_deletion_protection
-  password_version      = var.db_password_version
-  tags                  = local.tags
+moved {
+  from = module.eks
+  to   = module.stack.module.eks
+}
+
+moved {
+  from = module.data
+  to   = module.stack.module.data
 }

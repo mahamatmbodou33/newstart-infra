@@ -59,7 +59,9 @@ module "db" {
 
   backup_retention_period = var.backup_retention_days
   deletion_protection     = var.deletion_protection
-  skip_final_snapshot     = true
+  
+  skip_final_snapshot              = !var.final_snapshot
+  final_snapshot_identifier_prefix = "${var.name}-final"
 
   auto_minor_version_upgrade      = true
   performance_insights_enabled    = true

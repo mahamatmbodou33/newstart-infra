@@ -70,3 +70,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "final_snapshot" {
+  description = "Take a snapshot when the DB is destroyed (true in real prod)"
+  type        = bool
+  default     = false
+}
