@@ -43,3 +43,20 @@ variable "monthly_budget_usd" {
 variable "budget_email" {
   type = string
 }
+
+# GitHub OIDC "sub" now contains immutable numeric IDs (owner@id/repo@id).
+# IDs survive renames and can't be re-used by someone else.
+variable "github_owner_id" {
+  type        = string
+  description = "Numeric GitHub user/org ID"
+}
+
+variable "infra_repo_id" {
+  type        = string
+  description = "Numeric ID of the infra repo"
+}
+
+variable "app_repo_id" {
+  type        = string
+  description = "Numeric ID of the app repo"
+}

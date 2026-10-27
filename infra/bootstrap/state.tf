@@ -4,6 +4,10 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   infra_repo = "${var.github_owner}/${var.infra_repo}" # mahamatmbodou33/newstart-infra
   app_repo   = "${var.github_owner}/${var.app_repo}"   # mahamatmbodou33/newstart-app
+
+  # Exactly what GitHub puts at the start of the OIDC "sub" claim
+  infra_sub = "repo:${var.github_owner}@${var.github_owner_id}/${var.infra_repo}@${var.infra_repo_id}"
+  app_sub   = "repo:${var.github_owner}@${var.github_owner_id}/${var.app_repo}@${var.app_repo_id}"
 }
 
 resource "aws_s3_bucket" "state" {

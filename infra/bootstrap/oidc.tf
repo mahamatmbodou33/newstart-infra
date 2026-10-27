@@ -17,9 +17,9 @@ locals {
 # One trust policy per role. The ONLY difference is the "sub" value.
 data "aws_iam_policy_document" "github_trust" {
   for_each = {
-    plan  = ["repo:${local.infra_repo}:pull_request"]
-    apply = ["repo:${local.infra_repo}:environment:dev", "repo:${local.infra_repo}:environment:prod"]
-    ecr   = ["repo:${local.app_repo}:ref:refs/heads/main"]
+    plan  = ["${local.infra_sub}:pull_request"]
+    apply = ["${local.infra_sub}:environment:dev", "${local.infra_sub}:environment:prod"]
+    ecr   = ["${local.app_sub}:ref:refs/heads/main"]
   }
 
   statement {
