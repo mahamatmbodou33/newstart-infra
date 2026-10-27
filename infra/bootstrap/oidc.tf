@@ -23,7 +23,7 @@ data "aws_iam_policy_document" "github_trust" {
   }
 
   statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    actions = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
 
     principals {
       type        = "Federated"
