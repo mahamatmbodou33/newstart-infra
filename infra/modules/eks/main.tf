@@ -53,6 +53,7 @@ module "eks" {
         service_account = "ebs-csi-controller-sa"
       }]
     }
+    snapshot-controller = {}
   }
 
   # --- system node group ---
